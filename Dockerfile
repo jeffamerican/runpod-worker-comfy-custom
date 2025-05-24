@@ -66,6 +66,15 @@ WORKDIR /comfyui
 # Create necessary directories
 RUN mkdir -p models/checkpoints models/vae
 
+# Download HiDream necessities
+RUN wget -O models/diffusion_models/hidream/hidream-i1-full-fp16.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/hidream_i1_full_fp16.safetensors && \
+    wget -O models/text_encoders/hidream/Llama-3.1-8B-Instruct%20fp16.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/Llama-3.1-8B-Instruct%20fp16.safetensors && \
+    wget -O models/text_encoders/hidream/clip_g_hidream.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/clip_g_hidream.safetensors && \
+    wget -O models/text_encoders/hidream/clip_l_hidream.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/clip_l_hidream.safetensors && \
+    wget -O models/text_encoders/hidream/t5xxl_fp16.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/t5xxl_fp16.safetensors && \
+    wget -O models/vae/ae.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/ae.safetensors
+
+
 # Download checkpoints/vae/LoRA to include in image based on model type
 RUN if [ "$MODEL_TYPE" = "sdxl" ]; then \
       wget -O models/checkpoints/sd_xl_base_1.0.safetensors https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors && \
