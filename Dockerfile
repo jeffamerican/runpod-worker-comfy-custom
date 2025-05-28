@@ -29,6 +29,7 @@ RUN pip install -U huggingface-hub
 
 # Install ComfyUI
 RUN /usr/bin/yes | comfy --workspace /comfyui install --cuda-version 11.8 --nvidia
+RUN pip install -U transformers
 
 # Change working directory to ComfyUI
 WORKDIR /comfyui
