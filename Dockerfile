@@ -1,5 +1,5 @@
 # Stage 1: Base image with common dependencies
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04 as base
+FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04 as base
 
 # Prevents prompts from packages asking for user input during installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -26,6 +26,19 @@ RUN apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/*
 # Install comfy-cli
 RUN pip install comfy-cli
 RUN pip install -U huggingface-hub
+
+# Install PyTorch
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Install Triton
+RUN pip install triton
+
+# Install SageAttention from source
+ENV TORCH_CUDA_ARCH_LIST="9.0"
+RUN git clone https://github.com/thu-ml/SageAttention.git /SageAttention
+WORKDIR /SageAttention
+RUN pip install .
+WORKDIR /
 
 # Install ComfyUI
 RUN /usr/bin/yes | comfy --workspace /comfyui install --cuda-version 11.8 --nvidia
@@ -57,50 +70,10 @@ RUN /restore_snapshot.sh
 CMD ["/start.sh"]
 
 # Stage 2: Download models
-FROM base as downloader
-
-ARG HUGGINGFACE_ACCESS_TOKEN
-ARG MODEL_TYPE
-
-# Change working directory to ComfyUI
-WORKDIR /comfyui
-
-# Create necessary directories
-RUN mkdir -p models/checkpoints models/vae
-
-# Download HiDream necessities
-RUN wget -O models/diffusion_models/hidream/hidream-i1-full-fp16.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/hidream_i1_full_fp16.safetensors && \
-    wget -O models/text_encoders/hidream/Llama-3.1-8B-Instruct%20fp16.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/Llama-3.1-8B-Instruct%20fp16.safetensors && \
-    wget -O models/text_encoders/hidream/clip_g_hidream.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/clip_g_hidream.safetensors && \
-    wget -O models/text_encoders/hidream/clip_l_hidream.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/clip_l_hidream.safetensors && \
-    wget -O models/text_encoders/hidream/t5xxl_fp16.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/t5xxl_fp16.safetensors && \
-    wget -O models/vae/ae.safetensors https://huggingface.co/nitin19/HiDream-I1/resolve/main/ae.safetensors
-
-
-# Download checkpoints/vae/LoRA to include in image based on model type
-RUN if [ "$MODEL_TYPE" = "sdxl" ]; then \
-      wget -O models/checkpoints/sd_xl_base_1.0.safetensors https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors && \
-      wget -O models/vae/sdxl_vae.safetensors https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors && \
-      wget -O models/vae/sdxl-vae-fp16-fix.safetensors https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors; \
-    elif [ "$MODEL_TYPE" = "sd3" ]; then \
-      wget --header="Authorization: Bearer ${HUGGINGFACE_ACCESS_TOKEN}" -O models/checkpoints/sd3_medium_incl_clips_t5xxlfp8.safetensors https://huggingface.co/stabilityai/stable-diffusion-3-medium/resolve/main/sd3_medium_incl_clips_t5xxlfp8.safetensors; \
-    elif [ "$MODEL_TYPE" = "flux1-schnell" ]; then \
-      wget -O models/unet/flux1-schnell.safetensors https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/flux1-schnell.safetensors && \
-      wget -O models/clip/clip_l.safetensors https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors && \
-      wget -O models/clip/t5xxl_fp8_e4m3fn.safetensors https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors && \
-      wget -O models/vae/ae.safetensors https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors; \
-    elif [ "$MODEL_TYPE" = "flux1-dev" ]; then \
-      wget --header="Authorization: Bearer ${HUGGINGFACE_ACCESS_TOKEN}" -O models/unet/flux1-dev.safetensors https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1-dev.safetensors && \
-      wget -O models/clip/clip_l.safetensors https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors && \
-      wget -O models/clip/t5xxl_fp8_e4m3fn.safetensors https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors && \
-      wget --header="Authorization: Bearer ${HUGGINGFACE_ACCESS_TOKEN}" -O models/vae/ae.safetensors https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors; \
-    fi
-
 # Stage 3: Final image
 FROM base as final
 
 # Copy models from stage 2 to the final image
-COPY --from=downloader /comfyui/models /comfyui/models
 
 # Start container
 CMD ["/start.sh"]
